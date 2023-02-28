@@ -1,0 +1,306 @@
+---
+title: "Census geographic data and applications in R"
+author: "Ram Mandava"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## 1. What is the purpose of having different folders? Why do we use R projects (.Rproj) files for everything we do?
+RStudio projects eliminates so much of the early-stage hassle and confusion around reading in and exporting data. Setting up a working directory properly also helps build up good habits that are conducive to reproducible analysis.
+
+RStudio projects solve the problem of ‘fragile’ file paths by making file paths relative. The RStudio project file is a file that sits in the root directory, with the extension .Rproj. When your RStudio session is running through the project file (.Rproj), the current working directory points to the root folder where that .Rproj file is saved.
+
+RStudio projects, it’s a good practice to structure your directory in a way that helps anybody else you are collaborating with - or a future version of you trying to reproduce some analysis - to navigate the analysis easily. 
+
+
+## 2. Please explain what goes into each of these folders: bin, data, doc, results, src.
+Keeping files in a project folder, is a good practice to keep all files for a given project in the same project-specific folder. 
+
+
+Folder sub-directories:
+
+**project**
+is the top-level folder and contains all of the folders and files associated with that project. 
+This folder should be renamed for each unique project.
+
+**data**
+contains the raw data files used in the project. These files should not be altered and are ideally read-only.
+
+**doc**
+contains any manuscripts or interim summaries produced with the project.
+
+**bin**
+contains any plots, images, tables, or figures created and saved by your code. 
+It should be possible to delete and regenerate this folder with the scripts in the project folder.
+
+**output**
+contains non-figure objects created by the scripts. For example, processed data or logs.
+
+**src**
+is an optional folder for any files you may want to source() in your scripts. This is not code that is run. 
+For example, simple .R files containing functions.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Basic usage of tigris
+
+```{r tigris_code, message=FALSE}
+
+library(tigris)
+
+st <- states()
+
+class(st)
+
+st
+
+plot(st$geometry)
+
+```
+
+```{r plotdemo, message=FALSE}
+
+nm_counties <- counties("NM")
+plot(nm_counties$geometry)
+
+la_tracts <- tracts("NM", "Los Alamos")
+plot(la_tracts$geometry)
+
+la_water <- area_water("NM", "Los Alamos")
+plot(la_water$geometry)
+
+```
+
+```{r plotdemo1, message=FALSE}
+
+dc_landmarks <- landmarks("DC", type = "point")
+plot(dc_landmarks$geometry)
+
+dc_roads <- primary_secondary_roads("DC")
+plot(dc_roads$geometry)
+
+dc_block_groups <- block_groups("DC")
+plot(dc_block_groups$geometry)
+
+
+```
+
+## Plotting geographic data
+
+
+```{r}
+
+library(ggplot2)
+
+ggplot(la_tracts) + 
+  geom_sf()
+
+ggplot(la_tracts) + 
+  geom_sf() + 
+  theme_void()
+
+
+```
+
+```{r ggplotdemo, message=FALSE}
+
+library(patchwork)
+
+la_block_groups <- block_groups("NM", "Los Alamos")
+
+gg1 <- ggplot(la_tracts) + 
+  geom_sf() + 
+  theme_void() + 
+  labs(title = "Census tracts")
+
+gg2 <- ggplot(la_block_groups) + 
+  geom_sf() + 
+  theme_void() + 
+  labs(title = "Block groups")
+
+gg1 + gg2
+
+```
+
+## Interactive viewing with mapview
+
+```{r}
+
+library(mapview)
+
+mapview(la_tracts)
+
+
+
+```
+
+## tigris workflows
+
+```{r}
+
+
+mi_counties <- counties("MI")
+mi_counties_cb <- counties("MI", cb = TRUE)
+
+mi_tiger_gg <- ggplot(mi_counties) + 
+  geom_sf() + 
+  theme_void() + 
+  labs(title = "TIGER/Line")
+
+mi_cb_gg <- ggplot(mi_counties_cb) + 
+  geom_sf() + 
+  theme_void() + 
+  labs(title = "Cartographic boundary")
+
+mi_tiger_gg + mi_cb_gg
+
+```
+
+```{r}
+options(tigris_use_cache = TRUE)
+
+rappdirs::user_cache_dir("tigris")
+```
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(glue)
+
+yearly_plots <- map(seq(1990, 2020, 10), ~{
+  year_tracts <- tracts("TX", "Tarrant", year = .x,
+                        cb = TRUE)
+
+  ggplot(year_tracts) + 
+    geom_sf() + 
+    theme_void() + 
+    labs(title = glue("{.x}: {nrow(year_tracts)} tracts"))
+})
+
+(yearly_plots[[1]] + yearly_plots[[2]]) / 
+  (yearly_plots[[3]] + yearly_plots[[4]])
+
+us_bgs_2020 <- block_groups(cb = TRUE, year = 2020)
+nrow(us_bgs_2020)
+
+state_codes <- c(state.abb, "DC", "PR")
+us_bgs_2018 <- map_dfr(
+  state_codes, 
+  ~block_groups(
+    state = .x, 
+    cb = TRUE, 
+    year = 2018
+  )
+)
+nrow(us_bgs_2018)
+
+
+```
+
+## Coordinate reference systems
+
+```{r}
+
+library(sf)
+
+fl_counties <- counties("FL", cb = TRUE)
+st_crs(fl_counties)
+
+
+```
+
+```{r}
+library(crsuggest)
+
+fl_crs <- suggest_crs(fl_counties)
+
+fl_projected <- st_transform(fl_counties, crs = 3087)
+
+head(fl_projected)
+
+st_crs(fl_projected)
+
+
+options(scipen = 999)
+
+ggplot(fl_counties) + 
+  geom_sf() + 
+  coord_sf(crs = 3087)
+
+ggplot(fl_counties) + 
+  geom_sf() + 
+  coord_sf(crs = 3087, datum = 3087)
+
+```
+
+## Working with geometries
+
+```{r}
+
+us_states <- states(cb = TRUE, resolution = "20m")
+
+ggplot(us_states) + 
+  geom_sf() + 
+  theme_void()
+
+ggplot(us_states) + 
+  geom_sf() + 
+  coord_sf(crs = 'ESRI:102003') + 
+  theme_void()
+
+us_states_shifted <- shift_geometry(us_states)
+
+ggplot(us_states_shifted) + 
+  geom_sf() + 
+  theme_void()
+
+us_states_outside <- shift_geometry(us_states, 
+                                    preserve_area = TRUE,
+                                    position = "outside")
+
+ggplot(us_states_outside) + 
+  geom_sf() + 
+  theme_void()
+
+tx_places <- places("TX", cb = TRUE) %>%
+  filter(NAME %in% c("Dallas", "Fort Worth", "Houston",
+                     "Austin", "San Antonio", "El Paso")) %>%
+  st_transform(6580)
+
+tx_outline <- states(cb = TRUE) %>%
+  filter(NAME == "Texas") %>%
+  st_transform(6580)
+
+ggplot() + 
+  geom_sf(data = tx_outline) + 
+  geom_sf(data = tx_places, fill = "red", color = NA) + 
+  theme_void()
+
+tx_centroids <- st_centroid(tx_places)
+
+ggplot() + 
+  geom_sf(data = tx_outline) + 
+  geom_sf(data = tx_centroids, color = "red", size = 3) + 
+  theme_void()
+
+lee <- fl_projected %>%
+  filter(NAME == "Lee")
+
+mapview(lee)
+
+lee
+
+lee_singlepart <- st_cast(lee, "POLYGON")
+
+lee_singlepart
+
+sanibel <- lee_singlepart[2,]
+
+mapview(sanibel)
+
+```
+

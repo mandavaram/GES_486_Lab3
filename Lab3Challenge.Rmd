@@ -1,0 +1,140 @@
+---
+title: "Lab 3 Challenge - How I made the viral map"
+author: "Ram Mandava"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages(c('dplyr', 'ggplot2', 'ggthemes', 'patchwork'))
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(patchwork)
+library(extrafont)
+```
+```{r}
+setwd('C:/GES_486/Rworks/Lab3/Projects/Election/')
+```
+
+```{r}
+#change data.csv to the filepath where your info is saved
+data <- read.csv('data.csv')
+```
+
+```{r}
+#set the order you want the categories to appear in (top to bottom)
+data$plot_order <- factor(data$party, levels=c('did not vote', 'other', 'democrat',  'republican'))
+ 
+#determine the colors you want for each category
+colors <- c('democrat' = '#0783c9', 'republican' = '#ff5d38', 'other' = '#EFAB08', 'did not vote' = '#dddddd')
+ 
+#set the first and last years in your data
+firstyear <- 1976
+lastyear <- 2020
+ 
+#make a title for your plot. the \n character is a line break
+title <- 'How did\nAmerica vote?'
+```
+
+```{r}
+
+
+label_font <- 'Roboto Medium'
+title_font <- 'Unna'
+
+#make a special legend plot for AK
+#skip this whole chunk if you don't need a legend.
+#alternatively, replace 'AK' with the criteria that defines your special legend region
+legend <- 
+  ggplot(subset(data, state == 'AK'), aes(x = year, y = pct, fill = plot_order, group = plot_order)) + 
+  geom_area() +
+  geom_text(aes(x = .75*lastyear, y = .15), label = 'AK', alpha = .03, size = 10, family = label_font) +
+  scale_fill_manual(values = colors) +
+  scale_x_continuous(limits = c(firstyear, lastyear), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 1.0001),  expand = c(0, 0)) +
+  theme(legend.position = 'none', 
+        aspect.ratio=1, 
+        panel.background =  element_rect(fill = '#cccccc', color = '#cccccc'), 
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size=15, family = label_font, colour = '#707070'),
+        plot.margin=grid::unit(c(0,0,0,0), "mm"))
+```
+
+```{r}
+#create a mini chart for each state except AK
+states <- unique(data$state)
+states <- states[!grepl('AK', states)]
+ 
+for (i in 1:length(states)) {
+  plot <- 
+    ggplot(subset(data, state == states[i]), aes(x = year, y = pct, fill = plot_order, group = plot_order)) + 
+    theme_map() +
+    geom_area() +
+    geom_text(aes(x = .75*lastyear, y = .15), label = states[i],alpha = .03,  size = 6, family = label_font) +
+    scale_fill_manual(values = colors) +
+    scale_x_continuous(limits = c(firstyear, lastyear), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 1.0001),  expand = c(0, 0)) +
+    theme(legend.position = 'none', 
+          aspect.ratio=1, 
+          panel.background =  element_rect(fill = '#cccccc', color = '#cccccc'), 
+          plot.margin=grid::unit(c(0,0,0,0), "mm"))
+ 
+  assign(states[i], plot)
+}
+```
+```{r}
+#make the title a ggplot so we can easily slot it into the final layout
+title <- 
+  ggplot() +
+  theme_map() +
+  geom_text(aes(x = 0, y = 0), label = title, size = 15, lineheight = .5, family = title_font, fontface = 'bold') +
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
+```
+```{r}
+layout<-c(
+  area(1,1,2,4),
+  area(1,6,2,7),
+  area(2,11),
+  area(3,10),area(3,11),
+  area(4,1),area(4,2),area(4,3),area(4,4),area(4,5),
+  area(4,7),area(4,9),area(4,10),area(4,11),
+  area(5,1),area(5,2),area(5,3),area(5,4),area(5,5),
+  area(5,6),area(5,7),area(5,8),area(5,9),area(5,10),
+  area(6,1),area(6,2),area(6,3),area(6,4),area(6,5),
+  area(6,6),area(6,7),area(6,8),area(6,9),area(6,10),
+  area(7,2),area(7,3),area(7,4),area(7,5),area(7,6),
+  area(7,7),area(7,8),area(7,9),area(7,10),
+  area(8,3),area(8,4),area(8,5),area(8,6),area(8,7),area(8,8),
+  area(9,1),area(9,4),area(9,10)
+)
+```
+
+```{r}
+wrap_plots(title, legend, 
+  ME, VT, NH, WA, ID, MT, ND, MN, MI, NY, MA, RI,
+  OR, UT, WY, SD, IA, WI, OH, PA, NJ, CT,
+  CA, NV, CO, NE, IL, IN, WV, VA, MD, DE,
+  AZ, NM, KS, MO, KY, TN, SC, NC, DC,
+  OK, LA, AR, MS, AL, GA, HI, TX, FL,
+  design = layout) &
+  plot_annotation(theme = theme(plot.background = element_rect(color  = '#f8f8f8')))
+
+```
+```{r}
+#setwd('C:/GES_486/Rworks/Lab3/Projects/Election/bin')
+ggsave("plot.png", width =11, height =9, units = "in")
+
+```
+```{r}
+#install.packages('svglite')
+ggsave("plot.svg", width =11, height =9, units = "in")
+```
+
+
